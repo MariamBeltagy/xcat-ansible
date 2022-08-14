@@ -1,0 +1,26 @@
+---
+- name: copy, gen and pack image
+  shell: |
+          copycds /tmp/CentOS-Stream-8-x86_64-20220513-dvd1.iso
+          genimage centos-stream8-x86_64-netboot-compute
+          packimage centos-stream8-x86_64-netboot-compute
+
+- name: make node def
+  shell: |
+          mkdef -t node -o cn{{ index }} arch=x86_64 mac={{ item.mac }} ip={{ item.ip }} netboot="xnba" groups="all"
+          makehosts cn{{ index }}
+  loop: '{{ nodes }}'
+  loop_control:
+          index_var: index
+
+- name: make hosts, dns, networks
+  shell: |
+          makedns -n
+          makenetworks
+
+- name: assign image to compute nodes
+  shell: nodeset cn{{ index }} osimage=centos-stream8-x86_64-netboot-compute
+  loop: '{{ nodes }}'
+  loop_control:
+          index_var: index
+

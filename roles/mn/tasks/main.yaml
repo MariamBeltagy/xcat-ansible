@@ -1,0 +1,67 @@
+---
+#assume dvd exists in /tmp 
+- name: Creating mount point
+  file:
+          path: /mnt/iso/centos8
+          state: directory
+
+- name: mount the dvd
+  mount:
+          path: /mnt/iso/centos8
+          src: /tmp/CentOS-Stream-8-x86_64-20220506-dvd1.iso
+          fstype: iso9660
+          state: present
+
+- name: Add repo
+  yum_repository:
+          name: Centos8 packages
+          description: centos8-appstream
+          baseurl: file:///mnt/iso/centos8/AppStream
+          mirrorlist: http://mirrorlist.centos.org/?release=$stream&arch=$basearch&repo=AppStream&infra=$infra
+          enabled: yes
+          gpgcheck: yes
+
+- name: Disable SELinux
+  selinux:
+          state: disabled
+
+- name: Set a hostname
+  hostname:
+          name: xcatmn.cluster.com
+- name: Add static IP
+  nmcli:
+          conn_name: ens33
+          ip4: 192.168.248.128/24
+          gw4: 192.168.248.2
+          dns4: 192.168.248.128
+          state: present
+
+- name: Check if xcat installed
+  command: lsxcatd -v
+  register: result
+  ignore_errors: True
+
+- name: download and install xcat
+  block:
+          - name: Download go-xcat
+            get_url:
+                    url: https://raw.githubusercontent.com/xcat2/xcat-core/master/xCAT-server/share/xcat/tools/go-xcat
+                    dest: /tmp/go-xcat
+                    mode: '0755'
+          - name: install go-xcat
+            command: /tmp/go-xcat install
+            
+  when: not result.changed or result.failed
+
+- name: source xcat
+  shell: source /etc/profile.d/xcat.sh
+
+- name: set username and password
+  shell: chtab key=system passwd.username=root passwd.password=root
+
+- name: add dhcp interface and configure it
+  shell: |
+          chdef -t site dhcpinterfaces="ens33,virbr0"
+          makedhcp -n
+          makedhcp -a
+
